@@ -4,7 +4,7 @@ name: Release
 on:
   push:
     tags:
-      - 'v[0-9]+.[0-9]+.0'
+      - "v[0-9]+.[0-9]+.0"
 
 jobs:
   release:
@@ -17,21 +17,21 @@ jobs:
         include:
           # Linux — webkit2gtk-4.1 (Tauri v2 requirement)
           - platform: ubuntu-22.04
-            args: ''
+            args: ""
 
           # macOS — universal binary (Apple Silicon + Intel in one file)
           - platform: macos-latest
-            args: '--target universal-apple-darwin'
+            args: "--target universal-apple-darwin"
 
           # Windows — NSIS installer + MSI
           - platform: windows-latest
-            args: ''
+            args: ""
 
     runs-on: ${{ matrix.platform }}
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       # ── JavaScript toolchain ──────────────────────────────────────────────
       - name: Setup Bun
@@ -47,7 +47,7 @@ jobs:
       - name: Rust build cache
         uses: swatinem/rust-cache@v2
         with:
-          workspaces: './src-tauri -> target'
+          workspaces: "./src-tauri -> target"
 
       # ── Linux system dependencies (Tauri v2) ──────────────────────────────
       - name: Install Linux dependencies
@@ -71,7 +71,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tagName: ${{ github.ref_name }}
-          releaseName: 'TableViewer ${{ github.ref_name }}'
+          releaseName: "TableViewer ${{ github.ref_name }}"
           releaseBody: |
             ## What's new
             See [CHANGELOG](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for details.
