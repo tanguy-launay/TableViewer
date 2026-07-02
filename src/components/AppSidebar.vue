@@ -136,11 +136,17 @@ defineEmits<{
     (e: 'toggle-pin', q: string): void
 }>()
 
-function typeColor(ft: string): 'success' | 'info' | 'warning' | 'error' {
-    if (ft === 'parquet') return 'success'
-    if (ft === 'arrow')   return 'info'
+function typeColor(ft: string): 'success' | 'info' | 'warning' | 'error' | 'default' {
+    if (ft === 'parquet')               return 'success'
+    if (ft === 'arrow')                 return 'info'
+    if (ft === 'csv')                   return 'warning'
     if (ft === 'json' || ft === 'jsonl') return 'error'
-    return 'warning'
+    if (ft === 'yaml' || ft === 'yml')  return 'info'
+    if (ft === 'xml')                   return 'warning'
+    if (ft === 'toml')                  return 'default'
+    if (ft === 'duckdb')                return 'warning'
+    if (ft === 'sqlite')                return 'default'
+    return 'default'
 }
 </script>
 

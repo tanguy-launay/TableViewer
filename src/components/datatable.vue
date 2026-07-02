@@ -64,6 +64,14 @@
             @execute="onModalExecute"
         />
 
+        <!-- Jaq preprocessing modal -->
+        <JaqModal
+            v-model="showJaqModal"
+            :paths="jaqPendingPaths"
+            :filetype="jaqPendingType"
+            @confirm="confirmJaqOpen"
+        />
+
         <!-- CSV open modal -->
         <n-modal
             v-model:show="showCsvModal"
@@ -99,6 +107,7 @@ import AppSidebar from './AppSidebar.vue'
 import AppToolbar from './AppToolbar.vue'
 import DataGrid   from './DataGrid.vue'
 import SqlModal   from './SqlModal.vue'
+import JaqModal   from './JaqModal.vue'
 
 import { useThemeZoom, ZOOM_MIN, ZOOM_MAX } from '../composables/useThemeZoom'
 import { useFiles, CSV_SEP_OPTIONS } from '../composables/useFiles'
@@ -115,8 +124,9 @@ const sql = ref('')
 const {
     fileEntries, schemaMap, expandedSchemas,
     showCsvModal, pendingSep,
+    showJaqModal, jaqPendingPaths, jaqPendingType,
     buildEntriesJson,
-    openFile, confirmCsvOpen,
+    openFile, confirmCsvOpen, confirmJaqOpen,
     removeEntry, updateAlias, toggleSchema,
 } = useFiles(sql)
 

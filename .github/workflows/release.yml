@@ -69,6 +69,7 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DUCKDB_DOWNLOAD_LIB: "1"   # download prebuilt static DuckDB lib (avoids C++ compile)
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "TableViewer ${{ github.ref_name }}"
