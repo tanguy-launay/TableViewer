@@ -18,6 +18,7 @@
                     @clear-history="queryHistory = []"
                     @use-history="onUseHistory"
                     @toggle-pin="togglePin"
+                    @open-in-modal="openQueryModal"
                 />
 
                 <div class="main-panel">
@@ -51,11 +52,19 @@
                     <DataGrid
                         :columns="renderedHeaders"
                         :data="slicedData"
-                        :entries-json="entriesJson"
+                        @open-query-modal="openQueryModal()"
                     />
                 </div>
             </div>
         </div>
+
+        <!-- Query editor modal -->
+        <SelectionQueryModal
+            v-model:show="showQueryModal"
+            :entries-json="entriesJson"
+            :initial-query="queryModalSql"
+            @query-executed="pushHistory"
+        />
 
         <!-- SQL editor modal (Monaco) -->
         <SqlModal
@@ -104,11 +113,12 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { NConfigProvider, NModal, NSelect, NPagination } from 'naive-ui'
 import { darkTheme } from 'naive-ui'
 
-import AppSidebar from './AppSidebar.vue'
-import AppToolbar from './AppToolbar.vue'
-import DataGrid   from './DataGrid.vue'
-import SqlModal   from './SqlModal.vue'
-import JaqModal   from './JaqModal.vue'
+import AppSidebar          from './AppSidebar.vue'
+import AppToolbar          from './AppToolbar.vue'
+import DataGrid            from './DataGrid.vue'
+import SqlModal            from './SqlModal.vue'
+import JaqModal            from './JaqModal.vue'
+import SelectionQueryModal from './SelectionQueryModal.vue'
 
 import { useThemeZoom, ZOOM_MIN, ZOOM_MAX } from '../composables/useThemeZoom'
 import { useFiles, CSV_SEP_OPTIONS } from '../composables/useFiles'
@@ -135,6 +145,7 @@ const {
 const {
     tbHeaders, tbBody, tbRows, tbCols,
     queryHistory, pinnedQueries, togglePin,
+    pushHistory,
     executeSql, exportHistory,
     showExportCsvModal, exportCsvSep,
     doExport, confirmExportCsv,
@@ -144,6 +155,15 @@ const {
 const { searchText, searchMode, currentPage, filteredBody, renderedHeaders } = useSearch(tbHeaders, tbBody)
 
 const entriesJson = computed(() => buildEntriesJson())
+
+// ── Query editor modal (SelectionQueryModal) ────────────────────────────
+const showQueryModal  = ref(false)
+const queryModalSql   = ref('')
+
+function openQueryModal(q = '') {
+    queryModalSql.value  = q
+    showQueryModal.value = true
+}
 
 // ── SQL modal (Monaco editor) ─────────────────────────────────────────────
 const showSqlModal = ref(false)

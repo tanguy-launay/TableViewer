@@ -130,6 +130,7 @@ export function useQuery(
     queryHistory,
     pinnedQueries,
     togglePin,
+    pushHistory,
     executeSql,
     exportHistory,
     showExportCsvModal,

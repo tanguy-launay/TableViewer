@@ -62,23 +62,19 @@
         @clickoutside="showCtxMenu = false"
         @select="onCtxSelect"
     />
-
-    <!-- Query editor modal -->
-    <SelectionQueryModal
-        v-model:show="showQueryModal"
-        :entries-json="entriesJson"
-    />
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, h } from 'vue'
 import { NDataTable, NModal, NInput, NButton, NDropdown } from 'naive-ui'
-import SelectionQueryModal from './SelectionQueryModal.vue'
 
 const props = defineProps<{
     columns: any[]
     data: any[]
-    entriesJson: string
+}>()
+
+const emit = defineEmits<{
+    (e: 'open-query-modal'): void
 }>()
 
 // ── Cell detail modal ─────────────────────────────────────────────────────
@@ -167,17 +163,14 @@ function onContextMenu(e: MouseEvent) {
 
 function onCtxSelect(key: string) {
     showCtxMenu.value = false
-    if (key === 'query') showQueryModal.value = true
+    if (key === 'query') emit('open-query-modal')
 }
-
-// ── Query editor modal ────────────────────────────────────────────────────
-const showQueryModal = ref(false)
 
 // Ctrl+S while cell modal is open → query editor
 function onKeyDown(e: KeyboardEvent) {
     if (showCellModal.value && (e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault()
-        showQueryModal.value = true
+        emit('open-query-modal')
     }
 }
 

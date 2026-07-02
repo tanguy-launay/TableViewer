@@ -79,8 +79,9 @@
                 <div
                     v-for="q in pinnedQueries" :key="'pin-'+q"
                     class="history-item history-item--pinned"
-                    :title="q"
-                    @click="$emit('use-history', q)"
+                    :title="q + '\n\nCtrl+click or right-click → Open in modal'"
+                    @click="onHistClick($event, q)"
+                    @contextmenu.prevent="onHistCtx($event, q)"
                 >
                     <span class="history-item-text">{{ q }}</span>
                     <span class="pin-btn pin-btn--active" title="Unpin" @click.stop="$emit('toggle-pin', q)">📌</span>
@@ -94,8 +95,9 @@
                 <div
                     v-for="(q, i) in unpinnedHistory" :key="i"
                     class="history-item"
-                    :title="q"
-                    @click="$emit('use-history', q)"
+                    :title="q + '\n\nCtrl+click or right-click → Open in modal'"
+                    @click="onHistClick($event, q)"
+                    @contextmenu.prevent="onHistCtx($event, q)"
                 >
                     <span class="history-item-text">{{ q }}</span>
                     <span class="pin-btn" title="Pin" @click.stop="$emit('toggle-pin', q)">📌</span>
@@ -103,12 +105,23 @@
             </div>
         </div>
 
+        <!-- History item context menu -->
+        <n-dropdown
+            trigger="manual"
+            :show="histCtxShow"
+            :options="HIST_CTX_OPTIONS"
+            :x="histCtxX"
+            :y="histCtxY"
+            @clickoutside="histCtxShow = false"
+            @select="onHistCtxSelect"
+        />
+
     </div>
 </template>
 
 <script setup lang="ts">
 import { NButton, NDropdown, NInput, NTag } from 'naive-ui'
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { FILETYPE_OPTIONS } from '../composables/useFiles'
 import type { FileEntry, ColumnInfo } from '../types'
 
@@ -125,7 +138,7 @@ const unpinnedHistory = computed(() =>
     props.history.filter(q => !props.pinnedQueries.includes(q))
 )
 
-defineEmits<{
+const emit = defineEmits<{
     (e: 'open-file', key: string): void
     (e: 'remove-entry', id: string): void
     (e: 'update-alias', id: string, alias: string): void
@@ -134,7 +147,41 @@ defineEmits<{
     (e: 'clear-history'): void
     (e: 'use-history', q: string): void
     (e: 'toggle-pin', q: string): void
+    (e: 'open-in-modal', q: string): void
 }>()
+
+// ── History item context menu ─────────────────────────────────────────────
+const histCtxShow  = ref(false)
+const histCtxX     = ref(0)
+const histCtxY     = ref(0)
+const histCtxQuery = ref('')
+
+const HIST_CTX_OPTIONS = [
+    { label: '⚡ Open in modal view', key: 'modal' },
+    { label: '📋 Use query',          key: 'use'   },
+]
+
+function onHistCtx(e: MouseEvent, q: string) {
+    e.preventDefault()
+    histCtxQuery.value = q
+    histCtxX.value = e.clientX
+    histCtxY.value = e.clientY
+    histCtxShow.value = true
+}
+
+function onHistCtxSelect(key: string) {
+    histCtxShow.value = false
+    if (key === 'modal') emit('open-in-modal', histCtxQuery.value)
+    if (key === 'use')   emit('use-history',   histCtxQuery.value)
+}
+
+function onHistClick(e: MouseEvent, q: string) {
+    if (e.ctrlKey || e.metaKey) {
+        emit('open-in-modal', q)
+    } else {
+        emit('use-history', q)
+    }
+}
 
 function typeColor(ft: string): 'success' | 'info' | 'warning' | 'error' | 'default' {
     if (ft === 'parquet')               return 'success'
