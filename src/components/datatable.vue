@@ -51,6 +51,7 @@
                     <DataGrid
                         :columns="renderedHeaders"
                         :data="slicedData"
+                        :entries-json="entriesJson"
                     />
                 </div>
             </div>
@@ -141,6 +142,8 @@ const {
 
 // ── Search / filter ───────────────────────────────────────────────────────
 const { searchText, searchMode, currentPage, filteredBody, renderedHeaders } = useSearch(tbHeaders, tbBody)
+
+const entriesJson = computed(() => buildEntriesJson())
 
 // ── SQL modal (Monaco editor) ─────────────────────────────────────────────
 const showSqlModal = ref(false)
