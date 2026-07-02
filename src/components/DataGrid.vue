@@ -43,14 +43,25 @@
             </span>
         </div>
 
-        <!-- Right-click or Ctrl+S → open query editor -->
+        <!-- Right-click → dropdown menu  |  Ctrl+S → query editor directly -->
         <!-- eslint-disable-next-line vue/no-v-html -->
         <pre
             class="cell-pre"
             v-html="highlightedContent"
-            @contextmenu="showQueryModal = true"
+            @contextmenu="onContextMenu"
         />
     </n-modal>
+
+    <!-- Context-menu dropdown (no preventDefault — avoids WebKit2GTK crash) -->
+    <n-dropdown
+        trigger="manual"
+        :show="showCtxMenu"
+        :options="CTX_OPTIONS"
+        :x="ctxX"
+        :y="ctxY"
+        @clickoutside="showCtxMenu = false"
+        @select="onCtxSelect"
+    />
 
     <!-- Query editor modal -->
     <SelectionQueryModal
@@ -61,7 +72,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, h } from 'vue'
-import { NDataTable, NModal, NInput, NButton } from 'naive-ui'
+import { NDataTable, NModal, NInput, NButton, NDropdown } from 'naive-ui'
 import SelectionQueryModal from './SelectionQueryModal.vue'
 
 const props = defineProps<{
@@ -139,9 +150,30 @@ async function copyRow(row: Record<string, any>) {
     }
 }
 
-// ── Query editor (Ctrl+S or right-click inside cell modal) ────────────────
+// ── Right-click context menu ──────────────────────────────────────────────
+const showCtxMenu = ref(false)
+const ctxX        = ref(0)
+const ctxY        = ref(0)
+
+const CTX_OPTIONS = [
+    { label: '⚡ Open Query Editor', key: 'query' },
+]
+
+function onContextMenu(e: MouseEvent) {
+    ctxX.value = e.clientX
+    ctxY.value = e.clientY
+    showCtxMenu.value = true
+}
+
+function onCtxSelect(key: string) {
+    showCtxMenu.value = false
+    if (key === 'query') showQueryModal.value = true
+}
+
+// ── Query editor modal ────────────────────────────────────────────────────
 const showQueryModal = ref(false)
 
+// Ctrl+S while cell modal is open → query editor
 function onKeyDown(e: KeyboardEvent) {
     if (showCellModal.value && (e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault()
