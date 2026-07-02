@@ -17,31 +17,38 @@
         style="width: min(760px, 92vw); max-height: 80vh;"
         :segmented="{ content: true }"
     >
-        <!-- Search bar -->
-        <div class="cell-search-row">
-            <n-input
-                v-model:value="modalSearch"
-                placeholder="Search in cell…"
-                size="small"
-                clearable
-                style="flex: 1"
-            />
-            <n-button
-                size="small"
-                :type="modalRegex ? 'primary' : 'default'"
-                title="Regex"
-                @click="modalRegex = !modalRegex"
-            >.*</n-button>
-            <n-button
-                size="small"
-                :type="modalCase ? 'primary' : 'default'"
-                title="Case sensitive"
-                @click="modalCase = !modalCase"
-            >Aa</n-button>
-            <span v-if="modalSearch" class="cell-match-count">
-                {{ matchCount }} match{{ matchCount !== 1 ? 'es' : '' }}
-            </span>
-        </div>
+        <template #header-extra>
+            <div class="cell-search-row">
+                <n-input
+                    v-model:value="modalSearch"
+                    placeholder="Search in cell…"
+                    size="small"
+                    clearable
+                    style="width: 220px"
+                />
+                <n-button
+                    size="small"
+                    :type="modalRegex && !modalFuzzy ? 'primary' : 'default'"
+                    title="Regex"
+                    @click="setMode('regex')"
+                >.*</n-button>
+                <n-button
+                    size="small"
+                    :type="modalFuzzy ? 'primary' : 'default'"
+                    title="Fuzzy (all tokens must appear)"
+                    @click="setMode('fuzzy')"
+                >~</n-button>
+                <n-button
+                    size="small"
+                    :type="modalCase ? 'primary' : 'default'"
+                    title="Case sensitive"
+                    @click="modalCase = !modalCase"
+                >Aa</n-button>
+                <span v-if="modalSearch" class="cell-match-count">
+                    {{ matchCount }} match{{ matchCount !== 1 ? 'es' : '' }}
+                </span>
+            </div>
+        </template>
 
         <!-- Right-click → dropdown menu  |  Ctrl+S → query editor directly -->
         <!-- eslint-disable-next-line vue/no-v-html -->
@@ -85,8 +92,15 @@ const cellDisplay   = ref('')
 // ── Search inside modal ───────────────────────────────────────────────────
 const modalSearch = ref('')
 const modalRegex  = ref(false)
+const modalFuzzy  = ref(false)
 const modalCase   = ref(false)
 const matchCount  = ref(0)
+
+// Mutual-exclusive mode helper: only one of regex / fuzzy active at a time
+function setMode(mode: 'regex' | 'fuzzy') {
+    if (mode === 'regex') { modalRegex.value = !modalRegex.value; if (modalRegex.value) modalFuzzy.value = false }
+    if (mode === 'fuzzy') { modalFuzzy.value = !modalFuzzy.value; if (modalFuzzy.value) modalRegex.value = false }
+}
 
 const highlightedContent = computed(() => {
     const escaped = cellDisplay.value
@@ -98,6 +112,25 @@ const highlightedContent = computed(() => {
         matchCount.value = 0
         return escaped
     }
+
+    // Fuzzy: every space-separated token must appear as a substring.
+    // Each matching token is highlighted independently.
+    if (modalFuzzy.value) {
+        const tokens = modalSearch.value.trim().split(/\s+/).filter(Boolean)
+        if (tokens.length === 0) { matchCount.value = 0; return escaped }
+        const flags = 'g' + (modalCase.value ? '' : 'i')
+        let result = escaped
+        let total  = 0
+        let allFound = true
+        for (const tok of tokens) {
+            const re = new RegExp(tok.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), flags)
+            if (!re.test(result.replace(/<[^>]*>/g, ''))) { allFound = false; break }
+            result = result.replace(re, m => { total++; return `<mark class="search-hit">${m}</mark>` })
+        }
+        matchCount.value = allFound ? total : 0
+        return allFound ? result : escaped
+    }
+
     try {
         const flags = 'g' + (modalCase.value ? '' : 'i')
         const re = modalRegex.value
@@ -115,6 +148,7 @@ const highlightedContent = computed(() => {
 
 function openCell(colTitle: string, raw: any) {
     modalSearch.value = ''
+    modalFuzzy.value  = false
     cellLabel.value   = colTitle
     if (typeof raw === 'string') {
         const trimmed = raw.trim()
@@ -267,7 +301,7 @@ onUnmounted(() => {
     display: flex;
     align-items: center;
     gap: 6px;
-    margin-bottom: 8px;
+    /* no margin-bottom — it's in the header */
 }
 
 .cell-match-count {

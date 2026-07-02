@@ -85,6 +85,7 @@
                 >
                     <span class="history-item-text">{{ q }}</span>
                     <span class="pin-btn pin-btn--active" title="Unpin" @click.stop="$emit('toggle-pin', q)">📌</span>
+                    <span class="del-btn" title="Delete" @click.stop="emit('delete-history', q)">✕</span>
                 </div>
             </div>
 
@@ -101,6 +102,7 @@
                 >
                     <span class="history-item-text">{{ q }}</span>
                     <span class="pin-btn" title="Pin" @click.stop="$emit('toggle-pin', q)">📌</span>
+                    <span class="del-btn" title="Delete" @click.stop="emit('delete-history', q)">✕</span>
                 </div>
             </div>
         </div>
@@ -148,6 +150,8 @@ const emit = defineEmits<{
     (e: 'use-history', q: string): void
     (e: 'toggle-pin', q: string): void
     (e: 'open-in-modal', q: string): void
+    (e: 'delete-history', q: string): void
+    (e: 'export-history-item', payload: { q: string; format: 'csv' | 'parquet' }): void
 }>()
 
 // ── History item context menu ─────────────────────────────────────────────
@@ -157,8 +161,13 @@ const histCtxY     = ref(0)
 const histCtxQuery = ref('')
 
 const HIST_CTX_OPTIONS = [
-    { label: '⚡ Open in modal view', key: 'modal' },
-    { label: '📋 Use query',          key: 'use'   },
+    { label: '⚡ Open in modal view',   key: 'modal'    },
+    { label: '📋 Use query',            key: 'use'      },
+    { type: 'divider',                  key: 'd1'       },
+    { label: '⬇ Export as CSV',         key: 'csv'      },
+    { label: '⬇ Export as Parquet',     key: 'parquet'  },
+    { type: 'divider',                  key: 'd2'       },
+    { label: '✕ Delete from history',   key: 'delete'   },
 ]
 
 function onHistCtx(e: MouseEvent, q: string) {
@@ -171,8 +180,12 @@ function onHistCtx(e: MouseEvent, q: string) {
 
 function onHistCtxSelect(key: string) {
     histCtxShow.value = false
-    if (key === 'modal') emit('open-in-modal', histCtxQuery.value)
-    if (key === 'use')   emit('use-history',   histCtxQuery.value)
+    const q = histCtxQuery.value
+    if      (key === 'modal')   emit('open-in-modal',       q)
+    else if (key === 'use')     emit('use-history',          q)
+    else if (key === 'csv')     emit('export-history-item', { q, format: 'csv'     })
+    else if (key === 'parquet') emit('export-history-item', { q, format: 'parquet' })
+    else if (key === 'delete')  emit('delete-history',       q)
 }
 
 function onHistClick(e: MouseEvent, q: string) {
@@ -305,6 +318,18 @@ function typeColor(ft: string): 'success' | 'info' | 'warning' | 'error' | 'defa
 }
 .pin-btn--active { opacity: 0.7; }
 .pin-btn--active:hover { opacity: 1; }
+
+.del-btn {
+    flex-shrink: 0;
+    font-size: 11px;
+    opacity: 0;
+    cursor: pointer;
+    transition: opacity 0.1s;
+    line-height: 1;
+    color: #e06060;
+}
+.history-item:hover .del-btn { opacity: 0.6; }
+.del-btn:hover { opacity: 1 !important; }
 
 /* Schema */
 .schema-table  { margin-bottom: 2px; }

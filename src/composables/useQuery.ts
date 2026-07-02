@@ -29,11 +29,40 @@ export function useQuery(
     }
   }
 
+  function deleteHistory(q: string) {
+    queryHistory.value  = queryHistory.value.filter(h => h !== q)
+    pinnedQueries.value = pinnedQueries.value.filter(p => p !== q)
+  }
+
   function pushHistory(q: string) {
     queryHistory.value = [
       q,
       ...queryHistory.value.filter((h) => h !== q),
     ].slice(0, MAX_HISTORY);
+  }
+
+  async function exportHistoryItem(sql: string, format: 'csv' | 'parquet') {
+    if (!sql.trim() || fileEntries.value.length === 0) return
+    if (format === 'parquet') {
+      const dest = await save({ filters: [{ name: 'Parquet', extensions: ['parquet'] }] })
+      if (!dest) return
+      const result = JSON.parse(
+        await invoke<string>('export_parquet', { entriesJson: buildEntriesJson(), sql, dest })
+      )
+      if ('err_msg' in result) await message(result.err_msg, { title: 'Export error', kind: 'error' })
+      else                     await message(`Saved to ${dest}`, { title: 'Export complete' })
+    } else {
+      const dest = await save({ filters: [{ name: 'CSV', extensions: ['csv'] }] })
+      if (!dest) return
+      const result = JSON.parse(
+        await invoke<string>('export_csv_file', {
+          entriesJson: buildEntriesJson(), sql, dest,
+          sep: ','.charCodeAt(0),
+        })
+      )
+      if ('err_msg' in result) await message(result.err_msg, { title: 'Export error', kind: 'error' })
+      else                     await message(`Saved to ${dest}`, { title: 'Export complete' })
+    }
   }
 
   async function setUi(jStr: string) {
@@ -131,6 +160,8 @@ export function useQuery(
     pinnedQueries,
     togglePin,
     pushHistory,
+    deleteHistory,
+    exportHistoryItem,
     executeSql,
     exportHistory,
     showExportCsvModal,

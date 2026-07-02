@@ -19,6 +19,8 @@
                     @use-history="onUseHistory"
                     @toggle-pin="togglePin"
                     @open-in-modal="openQueryModal"
+                    @delete-history="deleteHistory"
+                    @export-history-item="({ q, format }) => exportHistoryItem(q, format)"
                 />
 
                 <div class="main-panel">
@@ -145,7 +147,7 @@ const {
 const {
     tbHeaders, tbBody, tbRows, tbCols,
     queryHistory, pinnedQueries, togglePin,
-    pushHistory,
+    pushHistory, deleteHistory, exportHistoryItem,
     executeSql, exportHistory,
     showExportCsvModal, exportCsvSep,
     doExport, confirmExportCsv,
