@@ -396,6 +396,51 @@ fn generate_table(col_names: &[String], body: Vec<HashMap<String, String>>) -> S
 
 // ─── Tauri commands ──────────────────────────────────────────────────────────
 
+/// Build a SELECT list for `sql` where complex-type columns (LIST, STRUCT, MAP, UNION)
+/// are wrapped with `to_json(col)::varchar` so DuckDB emits fully-serialised JSON
+/// instead of its truncated display representation (e.g. "[1, 20, ... 73]").
+/// Falls back to `"*"` if DESCRIBE fails (bad SQL, connection error, etc.).
+fn build_select_list(conn: &duckdb::Connection, sql: &str) -> String {
+    let describe = format!("DESCRIBE SELECT * FROM ({sql}) __d LIMIT 0");
+    let mut stmt = match conn.prepare(&describe) {
+        Ok(s) => s,
+        Err(_) => return "*".to_string(),
+    };
+    let mut rows = match stmt.query([]) {
+        Ok(r) => r,
+        Err(_) => return "*".to_string(),
+    };
+    let mut parts: Vec<String> = Vec::new();
+    loop {
+        match rows.next() {
+            Ok(Some(row)) => {
+                let col_name: String = row.get(0).unwrap_or_default();
+                let col_type: String = row.get(1).unwrap_or_default();
+                // quote the identifier so names with spaces / special chars are safe
+                let quoted = format!("\"{}\"", col_name.replace('"', "\"\""));
+                let upper = col_type.to_uppercase();
+                if upper.starts_with("LIST")
+                    || upper.starts_with("STRUCT")
+                    || upper.starts_with("MAP")
+                    || upper.starts_with("UNION")
+                    || upper.ends_with("[]")
+                {
+                    parts.push(format!("to_json({quoted})::varchar AS {quoted}"));
+                } else {
+                    parts.push(quoted);
+                }
+            }
+            Ok(None) => break,
+            Err(_) => break,
+        }
+    }
+    if parts.is_empty() {
+        "*".to_string()
+    } else {
+        parts.join(", ")
+    }
+}
+
 #[tauri::command]
 fn execute_query(entries_json: &str, sql: &str) -> String {
     let entries = match parse_entries(entries_json) {
@@ -407,7 +452,12 @@ fn execute_query(entries_json: &str, sql: &str) -> String {
         Err(e) => return err_json(&e),
     };
 
-    let wrapped = format!("SELECT ROW_NUMBER() OVER () AS idx, * FROM ({sql}) __q");
+    // DESCRIBE the user query to find complex-type columns (LIST, STRUCT, MAP, UNION).
+    // Those columns are wrapped with to_json()::varchar so DuckDB emits full JSON
+    // instead of its truncated display representation (e.g. "[1, 20, ... 73]").
+    let select_list = build_select_list(&conn, sql);
+
+    let wrapped = format!("SELECT ROW_NUMBER() OVER () AS idx, {select_list} FROM ({sql}) __q");
     let mut stmt = match conn.prepare(&wrapped) {
         Ok(s) => s,
         Err(e) => return err_json(&e.to_string()),
