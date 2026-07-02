@@ -17,9 +17,9 @@ tauri            = { version = "~2.11", features = [] }
 tauri-plugin-dialog = "~2.7"
 serde            = { version = "1.0",         features = ["derive"] }
 serde_json       = "1.0"
-# dev: build with DUCKDB_DOWNLOAD_LIB=1 to skip the C++ compile (~seconds)
-# CI/release: DUCKDB_DOWNLOAD_LIB=1 in the workflow env downloads the prebuilt static lib
-duckdb           = { version = "~1.10504.0",  features = [] }
+# bundled = statically compile DuckDB from source → self-contained binary (used for release)
+# dev: DUCKDB_DOWNLOAD_LIB=1 takes precedence over bundled → downloads prebuilt .so (seconds)
+duckdb           = { version = "~1.10504.0",  features = ["bundled", "parquet"] }
 jaq-all          = "0.2"
 serde_yaml       = "0.9"
 quick-xml        = { version = "0.36",        features = ["serialize"] }
