@@ -7,6 +7,18 @@
             size="small"
             style="font-size: smaller; font-weight: 550;"
         />
+
+        <!-- Hidden columns restore bar -->
+        <div v-if="hiddenCols.size > 0" class="hidden-bar">
+            <span class="hidden-bar-label">Hidden:</span>
+            <span
+                v-for="col in hiddenCols"
+                :key="col"
+                class="hidden-pill"
+                @click="unhideCol(col)"
+                :title="`Click to restore ${col}`"
+            >{{ col }} ↩</span>
+        </div>
     </div>
 
     <!-- Cell detail modal — opens on single-click of any non-idx cell -->
@@ -72,7 +84,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, h } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, h } from 'vue'
 import { NDataTable, NModal, NInput, NButton, NDropdown } from 'naive-ui'
 
 const props = defineProps<{
@@ -82,6 +94,8 @@ const props = defineProps<{
 
 const emit = defineEmits<{
     (e: 'open-query-modal'): void
+    (e: 'sort-col',   payload: { col: string; dir: 'asc' | 'desc' | null }): void
+    (e: 'filter-col', col: string): void
 }>()
 
 // ── Cell detail modal ─────────────────────────────────────────────────────
@@ -208,37 +222,97 @@ function onKeyDown(e: KeyboardEvent) {
     }
 }
 
+// ── Per-column sort / hide ────────────────────────────────────────────────
+const sortState  = ref<{ col: string; dir: 'asc' | 'desc' } | null>(null)
+const hiddenCols = ref<Set<string>>(new Set())
+
+// Reset when the query result changes (new columns = new query)
+watch(() => props.columns, () => {
+    sortState.value  = null
+    hiddenCols.value = new Set()
+})
+
+// ── Column sort / hide helpers ────────────────────────────────────────────
+function cycleSort(col: string) {
+    if (!sortState.value || sortState.value.col !== col) {
+        sortState.value = { col, dir: 'asc' }
+        emit('sort-col', { col, dir: 'asc' })
+    } else if (sortState.value.dir === 'asc') {
+        sortState.value = { col, dir: 'desc' }
+        emit('sort-col', { col, dir: 'desc' })
+    } else {
+        sortState.value = null
+        emit('sort-col', { col, dir: null })
+    }
+}
+
+function hideCol(col: string) {
+    const next = new Set(hiddenCols.value)
+    next.add(col)
+    hiddenCols.value = next
+}
+
+function unhideCol(col: string) {
+    const next = new Set(hiddenCols.value)
+    next.delete(col)
+    hiddenCols.value = next
+}
+
 // ── Column post-processing ────────────────────────────────────────────────
 const processedColumns = computed(() =>
-    props.columns.map(col => {
-        const base = col.render
+    props.columns
+        .filter(col => col.key === 'idx' || !hiddenCols.value.has(String(col.key)))
+        .map(col => {
+            const base = col.render
 
-        if (col.key === 'idx') {
+            if (col.key === 'idx') {
+                return {
+                    ...col,
+                    render: (row: Record<string, any>) => {
+                        const inner = base ? base(row) : String(row['idx'] ?? '')
+                        return h('span', { class: 'idx-cell', title: 'Double-click to copy row', onDblclick: () => copyRow(row) }, [inner])
+                    },
+                }
+            }
+
+            const colKey = String(col.key)
+            const s = sortState.value
+            const isSorted = s?.col === colKey
+            const sortIcon = isSorted ? (s!.dir === 'asc' ? '↑' : '↓') : '↕'
+
             return {
                 ...col,
+                // Custom header: name + sort + filter + hide icons
+                title: () => h('div', { class: 'col-header' }, [
+                    h('span', { class: 'col-name' }, String(col.title ?? colKey)),
+                    h('div', { class: 'col-actions' }, [
+                        h('span', {
+                            class: ['col-act', 'col-act--sort', isSorted ? 'col-act--on' : ''],
+                            title: `Sort by ${colKey}`,
+                            onClick: (e: MouseEvent) => { e.stopPropagation(); cycleSort(colKey) },
+                        }, sortIcon),
+                        h('span', {
+                            class: 'col-act col-act--filter',
+                            title: `Filter by ${colKey}`,
+                            onClick: (e: MouseEvent) => { e.stopPropagation(); emit('filter-col', colKey) },
+                        }, '⊤'),
+                        h('span', {
+                            class: 'col-act col-act--hide',
+                            title: `Hide ${colKey}`,
+                            onClick: (e: MouseEvent) => { e.stopPropagation(); hideCol(colKey) },
+                        }, '✕'),
+                    ]),
+                ]),
                 render: (row: Record<string, any>) => {
-                    const inner = base ? base(row) : String(row['idx'] ?? '')
+                    const inner = base ? base(row) : String(row[colKey] ?? '')
                     return h('span', {
-                        class: 'idx-cell',
-                        title: 'Double-click to copy row',
-                        onDblclick: () => copyRow(row),
+                        class: 'data-cell',
+                        title: 'Click to view full content',
+                        onClick: () => openCell(String(col.title ?? colKey), row[colKey]),
                     }, [inner])
                 },
             }
-        }
-
-        return {
-            ...col,
-            render: (row: Record<string, any>) => {
-                const inner = base ? base(row) : String(row[col.key] ?? '')
-                return h('span', {
-                    class: 'data-cell',
-                    title: 'Click to view full content',
-                    onClick: () => openCell(String(col.title ?? col.key), row[col.key]),
-                }, [inner])
-            },
-        }
-    })
+        })
 )
 
 // ── ResizeObserver ────────────────────────────────────────────────────────
@@ -317,4 +391,81 @@ onUnmounted(() => {
     border-radius: 2px;
     padding: 0 1px;
 }
+
+/* ── Column header ────────────────────────────────────────────────────── */
+.col-header {
+    display:         flex;
+    align-items:     center;
+    justify-content: space-between;
+    width:           100%;
+    gap:             4px;
+    min-width:       0;
+}
+
+.col-name {
+    flex:           1;
+    overflow:       hidden;
+    text-overflow:  ellipsis;
+    white-space:    nowrap;
+}
+
+.col-actions {
+    display:     flex;
+    align-items: center;
+    gap:         1px;
+    flex-shrink: 0;
+}
+
+.col-act {
+    cursor:        pointer;
+    font-size:     11px;
+    padding:       1px 3px;
+    border-radius: 3px;
+    user-select:   none;
+    line-height:   1;
+    transition:    background 0.1s, opacity 0.1s;
+}
+.col-act:hover { background: rgba(128,128,128,0.25); }
+
+/* Sort: always dim, bright when active */
+.col-act--sort  { opacity: 0.25; }
+.col-act--on    { opacity: 1; color: #18a058; }
+:deep(.n-data-table-th:hover) .col-act--sort { opacity: 0.7; }
+
+/* Filter + hide: hidden until th hover */
+.col-act--filter,
+.col-act--hide  { opacity: 0; }
+:deep(.n-data-table-th:hover) .col-act--filter,
+:deep(.n-data-table-th:hover) .col-act--hide  { opacity: 0.55; }
+.col-act--filter:hover { opacity: 1 !important; }
+.col-act--hide:hover   { opacity: 1 !important; color: #e06060; }
+
+/* ── Hidden columns restore bar ─────────────────────────────────────── */
+.hidden-bar {
+    display:     flex;
+    align-items: center;
+    flex-wrap:   wrap;
+    gap:         6px;
+    padding:     4px 8px;
+    font-size:   11px;
+    opacity:     0.75;
+    border-top:  1px solid var(--sidebar-border, #2e2e3a);
+}
+
+.hidden-bar-label {
+    font-weight:    600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-size:      10px;
+}
+
+.hidden-pill {
+    padding:       2px 7px;
+    border-radius: 10px;
+    background:    rgba(128,128,128,0.15);
+    cursor:        pointer;
+    white-space:   nowrap;
+    transition:    background 0.1s;
+}
+.hidden-pill:hover { background: rgba(128,128,128,0.3); }
 </style>

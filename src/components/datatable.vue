@@ -55,6 +55,8 @@
                         :columns="renderedHeaders"
                         :data="slicedData"
                         @open-query-modal="openQueryModal()"
+                        @sort-col="onSortCol"
+                        @filter-col="onFilterCol"
                     />
                 </div>
             </div>
@@ -165,6 +167,25 @@ const queryModalSql   = ref('')
 function openQueryModal(q = '') {
     queryModalSql.value  = q
     showQueryModal.value = true
+}
+
+// Sort a column: wrap the current SQL in a subquery + ORDER BY, then re-run
+function onSortCol({ col, dir }: { col: string; dir: 'asc' | 'desc' | null }) {
+    // Strip any existing outer sort wrapper we previously added
+    const stripped = sql.value.replace(/^SELECT \* FROM \(\n {2}([\s\S]+?)\n\) __sorted\nORDER BY .+$/i, '$1').trim()
+    if (dir === null) {
+        sql.value = stripped
+    } else {
+        sql.value = `SELECT * FROM (\n  ${stripped}\n) __sorted\nORDER BY "${col}" ${dir.toUpperCase()}`
+    }
+    currentPage.value = 1
+    executeSql()
+}
+
+// Filter column: open the query editor with a WHERE template pre-filled
+function onFilterCol(col: string) {
+    const base = sql.value.replace(/^SELECT \* FROM \(\n {2}([\s\S]+?)\n\) __sorted\nORDER BY .+$/i, '$1').trim()
+    openQueryModal(`SELECT *\nFROM (\n  ${base}\n) __filtered\nWHERE "${col}" `)
 }
 
 // ── SQL modal (Monaco editor) ─────────────────────────────────────────────
