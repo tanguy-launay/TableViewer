@@ -21,45 +21,48 @@
                     :disabled="!sqlText.trim() || loading"
                     :loading="loading"
                     @click="run"
-                >
-                    ▶ Run
-                </n-button>
+                >▶ Run</n-button>
                 <n-tag v-if="errMsg" type="error">{{ errMsg }}</n-tag>
             </div>
         </template>
 
         <!-- Results view -->
         <template v-else>
-            <div class="results-header">
-                <n-button text @click="view = 'editor'">← Query</n-button>
-                <span class="result-info">
-                    {{ resultInfo }}
-                    <span v-if="resultCapped" class="result-cap-warn">
-                        — showing first {{ MAX_DISPLAY_ROWS.toLocaleString() }} rows. Add LIMIT to your query.
-                    </span>
-                </span>
+            <!-- shape + pagination bar (mirrors main frame) -->
+            <div class="shape-bar">
+                <span class="shape-left">{{ resultInfo }}</span>
+                <n-pagination
+                    v-model:page="currentPage"
+                    :page-count="pageCount"
+                    size="small"
+                />
+                <span class="shape-right">{{ PAGE_SIZE }}/page</span>
             </div>
+
             <n-data-table
                 :columns="resultCols"
-                :data="resultRows"
-                :max-height="480"
-                virtual-scroll
+                :data="pagedRows"
+                :max-height="460"
                 size="small"
                 style="font-size: 12px;"
             />
+
+            <n-button text size="small" class="back-btn" @click="view = 'editor'">
+                ← Query
+            </n-button>
         </template>
     </n-modal>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { NModal, NButton, NDataTable, NTag } from 'naive-ui'
+import { NModal, NButton, NDataTable, NTag, NPagination } from 'naive-ui'
 import { VueMonacoEditor } from '@guolao/vue-monaco-editor'
 import { invoke } from '@tauri-apps/api/core'
 
 const props = defineProps<{
-    show: boolean
-    entriesJson: string
+    show:         boolean
+    entriesJson:  string
     initialQuery: string
 }>()
 
@@ -73,18 +76,29 @@ const localShow = computed({
     set: v => emit('update:show', v),
 })
 
+// ── Views ─────────────────────────────────────────────────────────────────
 const view    = ref<'editor' | 'results'>('editor')
 const sqlText = ref('')
 const loading = ref(false)
 const errMsg  = ref('')
 
+// ── Results + pagination ──────────────────────────────────────────────────
+const PAGE_SIZE   = 100
+const currentPage = ref(1)
 const resultCols  = ref<any[]>([])
-const resultRows  = ref<any[]>([])
+const allRows     = ref<any[]>([])   // full result set (never sliced)
 const resultInfo  = ref('')
-const resultCapped = ref(false)
 
-const MAX_DISPLAY_ROWS = 2000
+const pageCount = computed(() =>
+    Math.max(1, Math.ceil(allRows.value.length / PAGE_SIZE))
+)
 
+const pagedRows = computed(() => {
+    const start = (currentPage.value - 1) * PAGE_SIZE
+    return allRows.value.slice(start, start + PAGE_SIZE)
+})
+
+// ── Editor options ────────────────────────────────────────────────────────
 const EDITOR_OPTIONS = {
     minimap:              { enabled: false },
     fontSize:             13,
@@ -93,6 +107,7 @@ const EDITOR_OPTIONS = {
     automaticLayout:      true,
 }
 
+// ── Run ───────────────────────────────────────────────────────────────────
 async function run() {
     const sql = sqlText.value.trim()
     if (!sql) return
@@ -100,21 +115,16 @@ async function run() {
     loading.value = true
     errMsg.value  = ''
     try {
-        const raw = await invoke<string>('execute_query', {
-            entriesJson: props.entriesJson,
-            sql,
-        })
+        const raw    = await invoke<string>('execute_query', { entriesJson: props.entriesJson, sql })
         const result = JSON.parse(raw)
         if (result.err_msg) {
             errMsg.value = result.err_msg
         } else {
-            resultCols.value  = (result.headers as any[]).map(h => ({ ...h, ellipsis: { tooltip: true } }))
-            const body         = result.body as any[]
-            resultCapped.value = body.length > MAX_DISPLAY_ROWS
-            resultRows.value   = resultCapped.value ? body.slice(0, MAX_DISPLAY_ROWS) : body
-            resultInfo.value   = `${result.row_count} rows × ${result.col_count} cols`
-            errMsg.value     = ''
-            view.value       = 'results'
+            resultCols.value = (result.headers as any[]).map(h => ({ ...h, ellipsis: { tooltip: true } }))
+            allRows.value    = result.body as any[]
+            resultInfo.value = `${result.row_count} rows × ${result.col_count} cols`
+            currentPage.value = 1
+            view.value        = 'results'
             emit('query-executed', sql)
         }
     } finally {
@@ -122,22 +132,20 @@ async function run() {
     }
 }
 
+// ── Sync initialQuery ─────────────────────────────────────────────────────
 watch(() => props.initialQuery, q => {
-    if (q) {
-        sqlText.value = q
-        view.value    = 'editor'
-        errMsg.value  = ''
-    }
+    if (q) { sqlText.value = q; view.value = 'editor'; errMsg.value = '' }
 })
 
+// ── Reset on close ────────────────────────────────────────────────────────
 watch(() => props.show, open => {
     if (!open) {
         view.value        = 'editor'
         errMsg.value      = ''
         resultCols.value  = []
-        resultRows.value  = []
+        allRows.value     = []
         resultInfo.value  = ''
-        resultCapped.value = false
+        currentPage.value = 1
     }
 })
 </script>
@@ -149,18 +157,37 @@ watch(() => props.show, open => {
     gap:         10px;
     margin-top:  10px;
 }
-.results-header {
+
+/* mirrors the main-frame shape bar */
+.shape-bar {
     display:         flex;
     align-items:     center;
-    justify-content: space-between;
-    margin-bottom:   8px;
+    padding:         0 2px;
+    height:          34px;
+    margin-bottom:   6px;
+    border-bottom:   1px solid var(--sidebar-border, #2e2e3a);
 }
-.result-cap-warn {
-    color: #e88c3a;
-    font-size: 11px;
+
+.shape-left {
+    flex:        1;
+    font-size:   11px;
+    opacity:     0.6;
+    white-space: nowrap;
+    overflow:    hidden;
+    text-overflow: ellipsis;
 }
-.result-info {
-    font-size: 12px;
-    opacity:   0.6;
+
+.shape-right {
+    flex:        1;
+    font-size:   11px;
+    opacity:     0.6;
+    white-space: nowrap;
+    text-align:  right;
 }
+
+.back-btn {
+    margin-top: 8px;
+    opacity:    0.7;
+}
+.back-btn:hover { opacity: 1; }
 </style>
