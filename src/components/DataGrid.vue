@@ -17,7 +17,7 @@
         style="width: min(760px, 92vw); max-height: 80vh;"
         :segmented="{ content: true }"
     >
-        <!-- Search bar + Query-selection button -->
+        <!-- Search bar -->
         <div class="cell-search-row">
             <n-input
                 v-model:value="modalSearch"
@@ -41,25 +41,20 @@
             <span v-if="modalSearch" class="cell-match-count">
                 {{ matchCount }} match{{ matchCount !== 1 ? 'es' : '' }}
             </span>
-            <n-button
-                size="small"
-                type="info"
-                title="Open query editor"
-                @click="showSelQuery = true"
-            >⚡ Query</n-button>
         </div>
 
+        <!-- Right-click or Ctrl+S → open query editor -->
         <!-- eslint-disable-next-line vue/no-v-html -->
         <pre
             class="cell-pre"
             v-html="highlightedContent"
-            @mouseup="onPreMouseUp"
+            @contextmenu="showQueryModal = true"
         />
     </n-modal>
 
-    <!-- Selection query modal -->
+    <!-- Query editor modal -->
     <SelectionQueryModal
-        v-model:show="showSelQuery"
+        v-model:show="showQueryModal"
         :entries-json="entriesJson"
     />
 </template>
@@ -144,10 +139,15 @@ async function copyRow(row: Record<string, any>) {
     }
 }
 
-// ── Selection → query builder ─────────────────────────────────────────────
-const showSelQuery = ref(false)
+// ── Query editor (Ctrl+S or right-click inside cell modal) ────────────────
+const showQueryModal = ref(false)
 
-function onPreMouseUp() {}
+function onKeyDown(e: KeyboardEvent) {
+    if (showCellModal.value && (e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault()
+        showQueryModal.value = true
+    }
+}
 
 // ── Column post-processing ────────────────────────────────────────────────
 const processedColumns = computed(() =>
@@ -188,6 +188,7 @@ const bodyMaxHeight = ref(400)
 let ro: ResizeObserver | null = null
 
 onMounted(() => {
+    document.addEventListener('keydown', onKeyDown)
     if (!containerEl.value) return
     ro = new ResizeObserver(([entry]) => {
         bodyMaxHeight.value = Math.max(entry.contentRect.height, 80)
@@ -195,7 +196,10 @@ onMounted(() => {
     ro.observe(containerEl.value)
 })
 
-onUnmounted(() => ro?.disconnect())
+onUnmounted(() => {
+    document.removeEventListener('keydown', onKeyDown)
+    ro?.disconnect()
+})
 </script>
 
 <style scoped>
