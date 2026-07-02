@@ -41,13 +41,11 @@
             <span v-if="modalSearch" class="cell-match-count">
                 {{ matchCount }} match{{ matchCount !== 1 ? 'es' : '' }}
             </span>
-            <!-- Appears once the user has selected text in the pre below -->
             <n-button
-                v-if="lastSel"
                 size="small"
                 type="info"
-                title="Query selected text"
-                @click="querySelection"
+                title="Open query editor"
+                @click="showSelQuery = true"
             >⚡ Query</n-button>
         </div>
 
@@ -62,7 +60,6 @@
     <!-- Selection query modal -->
     <SelectionQueryModal
         v-model:show="showSelQuery"
-        v-model:selections="selectionList"
         :entries-json="entriesJson"
     />
 </template>
@@ -116,7 +113,6 @@ const highlightedContent = computed(() => {
 
 function openCell(colTitle: string, raw: any) {
     modalSearch.value = ''
-    lastSel.value     = ''
     cellLabel.value   = colTitle
     if (typeof raw === 'string') {
         const trimmed = raw.trim()
@@ -149,28 +145,9 @@ async function copyRow(row: Record<string, any>) {
 }
 
 // ── Selection → query builder ─────────────────────────────────────────────
-// Save selection on mouseup (selection is cleared when the button is clicked,
-// so we capture it early and store it in lastSel).
-const lastSel       = ref('')
-const showSelQuery  = ref(false)
-const selectionList = ref<string[]>([])
+const showSelQuery = ref(false)
 
-function onPreMouseUp() {
-    const sel = window.getSelection()?.toString().trim() ?? ''
-    if (sel) lastSel.value = sel
-}
-
-function querySelection() {
-    if (!lastSel.value) return
-    if (showSelQuery.value) {
-        // modal already open → append as next $n
-        selectionList.value = [...selectionList.value, lastSel.value]
-    } else {
-        selectionList.value = [lastSel.value]
-        showSelQuery.value  = true
-    }
-    lastSel.value = ''
-}
+function onPreMouseUp() {}
 
 // ── Column post-processing ────────────────────────────────────────────────
 const processedColumns = computed(() =>
