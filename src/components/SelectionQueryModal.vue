@@ -99,12 +99,7 @@ async function run() {
         if (result.err_msg) {
             errMsg.value = result.err_msg
         } else {
-            resultCols.value = (result.headers as string[]).map(h => ({
-                title:     h,
-                key:       h,
-                resizable: true,
-                ellipsis:  { tooltip: true },
-            }))
+            resultCols.value = (result.headers as any[]).map(h => ({ ...h, ellipsis: { tooltip: true } }))
             resultRows.value = result.body
             resultInfo.value = `${result.row_count} rows × ${result.col_count} cols`
             errMsg.value     = ''
