@@ -48,7 +48,7 @@
         <pre
             class="cell-pre"
             v-html="highlightedContent"
-            @contextmenu="onContextMenu"
+            @contextmenu.prevent="onContextMenu"
         />
     </n-modal>
 
