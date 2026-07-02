@@ -17,7 +17,7 @@
         style="width: min(760px, 92vw); max-height: 80vh;"
         :segmented="{ content: true }"
     >
-        <!-- Search bar -->
+        <!-- Search bar + Query-selection button -->
         <div class="cell-search-row">
             <n-input
                 v-model:value="modalSearch"
@@ -41,14 +41,21 @@
             <span v-if="modalSearch" class="cell-match-count">
                 {{ matchCount }} match{{ matchCount !== 1 ? 'es' : '' }}
             </span>
+            <!-- Appears once the user has selected text in the pre below -->
+            <n-button
+                v-if="lastSel"
+                size="small"
+                type="info"
+                title="Query selected text"
+                @click="querySelection"
+            >⚡ Query</n-button>
         </div>
 
-        <!-- Right-click selected text → opens SelectionQueryModal directly (no intermediate menu) -->
         <!-- eslint-disable-next-line vue/no-v-html -->
         <pre
             class="cell-pre"
             v-html="highlightedContent"
-            @contextmenu.prevent="onCtxMenu"
+            @mouseup="onPreMouseUp"
         />
     </n-modal>
 
@@ -76,7 +83,7 @@ const showCellModal = ref(false)
 const cellLabel     = ref('')
 const cellDisplay   = ref('')
 
-// modal search
+// ── Search inside modal ───────────────────────────────────────────────────
 const modalSearch = ref('')
 const modalRegex  = ref(false)
 const modalCase   = ref(false)
@@ -109,7 +116,8 @@ const highlightedContent = computed(() => {
 
 function openCell(colTitle: string, raw: any) {
     modalSearch.value = ''
-    cellLabel.value = colTitle
+    lastSel.value     = ''
+    cellLabel.value   = colTitle
     if (typeof raw === 'string') {
         const trimmed = raw.trim()
         if ((trimmed.startsWith('[') || trimmed.startsWith('{')) && (trimmed.endsWith(']') || trimmed.endsWith('}'))) {
@@ -140,23 +148,28 @@ async function copyRow(row: Record<string, any>) {
     }
 }
 
-// ── Right-click → SelectionQueryModal ────────────────────────────────────
-// No intermediate context menu — right-click directly opens the query builder.
-// If the modal is already open, the selection is appended as the next $n binding.
-const showSelQuery   = ref(false)
-const selectionList  = ref<string[]>([])
+// ── Selection → query builder ─────────────────────────────────────────────
+// Save selection on mouseup (selection is cleared when the button is clicked,
+// so we capture it early and store it in lastSel).
+const lastSel       = ref('')
+const showSelQuery  = ref(false)
+const selectionList = ref<string[]>([])
 
-function onCtxMenu() {
+function onPreMouseUp() {
     const sel = window.getSelection()?.toString().trim() ?? ''
-    if (!sel) return
+    if (sel) lastSel.value = sel
+}
+
+function querySelection() {
+    if (!lastSel.value) return
     if (showSelQuery.value) {
-        // modal already open — add as next $n
-        selectionList.value = [...selectionList.value, sel]
+        // modal already open → append as next $n
+        selectionList.value = [...selectionList.value, lastSel.value]
     } else {
-        // fresh open with $1 = selection
-        selectionList.value = [sel]
+        selectionList.value = [lastSel.value]
         showSelQuery.value  = true
     }
+    lastSel.value = ''
 }
 
 // ── Column post-processing ────────────────────────────────────────────────
@@ -195,7 +208,6 @@ const processedColumns = computed(() =>
 // ── ResizeObserver ────────────────────────────────────────────────────────
 const containerEl   = ref<HTMLElement | null>(null)
 const bodyMaxHeight = ref(400)
-
 let ro: ResizeObserver | null = null
 
 onMounted(() => {
