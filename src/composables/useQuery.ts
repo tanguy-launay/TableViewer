@@ -17,8 +17,17 @@ export function useQuery(
   const tbCols = ref(0);
 
   const queryHistory = ref<string[]>([]);
+  const pinnedQueries = ref<string[]>([]);
   const showExportCsvModal = ref(false);
   const exportCsvSep = ref(",");
+
+  function togglePin(q: string) {
+    if (pinnedQueries.value.includes(q)) {
+      pinnedQueries.value = pinnedQueries.value.filter((p) => p !== q);
+    } else {
+      pinnedQueries.value = [q, ...pinnedQueries.value];
+    }
+  }
 
   function pushHistory(q: string) {
     queryHistory.value = [
@@ -119,6 +128,8 @@ export function useQuery(
     tbRows,
     tbCols,
     queryHistory,
+    pinnedQueries,
+    togglePin,
     executeSql,
     exportHistory,
     showExportCsvModal,

@@ -74,13 +74,33 @@
                 </div>
             </div>
 
-            <div v-if="history.length === 0" class="sidebar-empty">No history yet</div>
+            <div v-if="pinnedQueries.length > 0" class="history-section">
+                <span class="history-section-label">📌 Pinned</span>
+                <div
+                    v-for="q in pinnedQueries" :key="'pin-'+q"
+                    class="history-item history-item--pinned"
+                    :title="q"
+                    @click="$emit('use-history', q)"
+                >
+                    <span class="history-item-text">{{ q }}</span>
+                    <span class="pin-btn pin-btn--active" title="Unpin" @click.stop="$emit('toggle-pin', q)">📌</span>
+                </div>
+            </div>
 
-            <div
-                v-for="(q, i) in history" :key="i"
-                class="history-item" :title="q"
-                @click="$emit('use-history', q)"
-            >{{ q }}</div>
+            <div v-if="unpinnedHistory.length === 0 && pinnedQueries.length === 0" class="sidebar-empty">No history yet</div>
+
+            <div v-if="unpinnedHistory.length > 0" class="history-section">
+                <span v-if="pinnedQueries.length > 0" class="history-section-label">Recent</span>
+                <div
+                    v-for="(q, i) in unpinnedHistory" :key="i"
+                    class="history-item"
+                    :title="q"
+                    @click="$emit('use-history', q)"
+                >
+                    <span class="history-item-text">{{ q }}</span>
+                    <span class="pin-btn" title="Pin" @click.stop="$emit('toggle-pin', q)">📌</span>
+                </div>
+            </div>
         </div>
 
     </div>
@@ -88,16 +108,22 @@
 
 <script setup lang="ts">
 import { NButton, NDropdown, NInput, NTag } from 'naive-ui'
+import { computed } from 'vue'
 import { FILETYPE_OPTIONS } from '../composables/useFiles'
 import type { FileEntry, ColumnInfo } from '../types'
 
-defineProps<{
+const props = defineProps<{
     open: boolean
     entries: FileEntry[]
     schemaMap: Record<string, ColumnInfo[]>
     expandedSchemas: Record<string, boolean>
     history: string[]
+    pinnedQueries: string[]
 }>()
+
+const unpinnedHistory = computed(() =>
+    props.history.filter(q => !props.pinnedQueries.includes(q))
+)
 
 defineEmits<{
     (e: 'open-file', key: string): void
@@ -107,6 +133,7 @@ defineEmits<{
     (e: 'export-history'): void
     (e: 'clear-history'): void
     (e: 'use-history', q: string): void
+    (e: 'toggle-pin', q: string): void
 }>()
 
 function typeColor(ft: string): 'success' | 'info' | 'warning' | 'error' {
@@ -179,18 +206,52 @@ function typeColor(ft: string): 'success' | 'info' | 'warning' | 'error' {
 .remove-btn  { flex-shrink: 0; }
 
 /* History */
+.history-section { margin-bottom: 4px; }
+
+.history-section-label {
+    display: block;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    opacity: 0.4;
+    padding: 2px 4px 1px;
+    margin-top: 4px;
+}
+
 .history-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
     font-size: 12px;
     font-family: monospace;
-    padding: 3px 6px;
+    padding: 3px 4px 3px 6px;
     border-radius: 4px;
     cursor: pointer;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
     margin-bottom: 2px;
 }
 .history-item:hover { background: var(--history-hover); }
+.history-item:hover .pin-btn { opacity: 0.5; }
+
+.history-item--pinned { border-left: 2px solid #18a058; padding-left: 4px; }
+
+.history-item-text {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.pin-btn {
+    flex-shrink: 0;
+    font-size: 11px;
+    opacity: 0;
+    cursor: pointer;
+    transition: opacity 0.1s;
+    line-height: 1;
+}
+.pin-btn--active { opacity: 0.7; }
+.pin-btn--active:hover { opacity: 1; }
 
 /* Schema */
 .schema-table  { margin-bottom: 2px; }

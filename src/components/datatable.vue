@@ -9,6 +9,7 @@
                     :schema-map="schemaMap"
                     :expanded-schemas="expandedSchemas"
                     :history="queryHistory"
+                    :pinned-queries="pinnedQueries"
                     @open-file="openFile"
                     @remove-entry="removeEntry"
                     @update-alias="updateAlias"
@@ -16,6 +17,7 @@
                     @export-history="exportHistory"
                     @clear-history="queryHistory = []"
                     @use-history="onUseHistory"
+                    @toggle-pin="togglePin"
                 />
 
                 <div class="main-panel">
@@ -121,7 +123,8 @@ const {
 // ── Query + history + export ──────────────────────────────────────────────
 const {
     tbHeaders, tbBody, tbRows, tbCols,
-    queryHistory, executeSql, exportHistory,
+    queryHistory, pinnedQueries, togglePin,
+    executeSql, exportHistory,
     showExportCsvModal, exportCsvSep,
     doExport, confirmExportCsv,
 } = useQuery(fileEntries, sql, buildEntriesJson)
