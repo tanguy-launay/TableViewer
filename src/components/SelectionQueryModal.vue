@@ -32,12 +32,18 @@
         <template v-else>
             <div class="results-header">
                 <n-button text @click="view = 'editor'">← Query</n-button>
-                <span class="result-info">{{ resultInfo }}</span>
+                <span class="result-info">
+                    {{ resultInfo }}
+                    <span v-if="resultCapped" class="result-cap-warn">
+                        — showing first {{ MAX_DISPLAY_ROWS.toLocaleString() }} rows. Add LIMIT to your query.
+                    </span>
+                </span>
             </div>
             <n-data-table
                 :columns="resultCols"
                 :data="resultRows"
                 :max-height="480"
+                virtual-scroll
                 size="small"
                 style="font-size: 12px;"
             />
@@ -72,9 +78,12 @@ const sqlText = ref('')
 const loading = ref(false)
 const errMsg  = ref('')
 
-const resultCols = ref<any[]>([])
-const resultRows = ref<any[]>([])
-const resultInfo = ref('')
+const resultCols  = ref<any[]>([])
+const resultRows  = ref<any[]>([])
+const resultInfo  = ref('')
+const resultCapped = ref(false)
+
+const MAX_DISPLAY_ROWS = 2000
 
 const EDITOR_OPTIONS = {
     minimap:              { enabled: false },
@@ -99,9 +108,11 @@ async function run() {
         if (result.err_msg) {
             errMsg.value = result.err_msg
         } else {
-            resultCols.value = (result.headers as any[]).map(h => ({ ...h, ellipsis: { tooltip: true } }))
-            resultRows.value = result.body
-            resultInfo.value = `${result.row_count} rows × ${result.col_count} cols`
+            resultCols.value  = (result.headers as any[]).map(h => ({ ...h, ellipsis: { tooltip: true } }))
+            const body         = result.body as any[]
+            resultCapped.value = body.length > MAX_DISPLAY_ROWS
+            resultRows.value   = resultCapped.value ? body.slice(0, MAX_DISPLAY_ROWS) : body
+            resultInfo.value   = `${result.row_count} rows × ${result.col_count} cols`
             errMsg.value     = ''
             view.value       = 'results'
             emit('query-executed', sql)
@@ -121,11 +132,12 @@ watch(() => props.initialQuery, q => {
 
 watch(() => props.show, open => {
     if (!open) {
-        view.value       = 'editor'
-        errMsg.value     = ''
-        resultCols.value = []
-        resultRows.value = []
-        resultInfo.value = ''
+        view.value        = 'editor'
+        errMsg.value      = ''
+        resultCols.value  = []
+        resultRows.value  = []
+        resultInfo.value  = ''
+        resultCapped.value = false
     }
 })
 </script>
@@ -142,6 +154,10 @@ watch(() => props.show, open => {
     align-items:     center;
     justify-content: space-between;
     margin-bottom:   8px;
+}
+.result-cap-warn {
+    color: #e88c3a;
+    font-size: 11px;
 }
 .result-info {
     font-size: 12px;
