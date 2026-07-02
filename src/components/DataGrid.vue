@@ -43,7 +43,7 @@
             </span>
         </div>
 
-        <!-- Content with search highlights; right-click opens query-selection menu -->
+        <!-- Right-click selected text → opens SelectionQueryModal directly (no intermediate menu) -->
         <!-- eslint-disable-next-line vue/no-v-html -->
         <pre
             class="cell-pre"
@@ -51,23 +51,6 @@
             @contextmenu.prevent="onCtxMenu"
         />
     </n-modal>
-
-    <!-- Context menu (teleported so z-index / overflow never clips it) -->
-    <teleport to="body">
-        <div
-            v-if="showCtx"
-            class="cell-ctx-menu"
-            :style="{ position: 'fixed', top: ctxY + 'px', left: ctxX + 'px' }"
-            @click.stop
-        >
-            <div class="ctx-item" @click="querySelection(false)">
-                ⚡ Query <em class="ctx-sel-preview">"{{ ctxText.length > 28 ? ctxText.slice(0, 28) + '…' : ctxText }}"</em> as $1
-            </div>
-            <div v-if="showSelQuery" class="ctx-item" @click="querySelection(true)">
-                ＋ Add as ${{ selectionList.length + 1 }}
-            </div>
-        </div>
-    </teleport>
 
     <!-- Selection query modal -->
     <SelectionQueryModal
@@ -84,7 +67,7 @@ import SelectionQueryModal from './SelectionQueryModal.vue'
 
 const props = defineProps<{
     columns: any[]
-    data: any[]        // already sliced by parent
+    data: any[]
     entriesJson: string
 }>()
 
@@ -100,7 +83,6 @@ const modalCase   = ref(false)
 const matchCount  = ref(0)
 
 const highlightedContent = computed(() => {
-    // HTML-escape raw content first
     const escaped = cellDisplay.value
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
@@ -128,7 +110,6 @@ const highlightedContent = computed(() => {
 function openCell(colTitle: string, raw: any) {
     modalSearch.value = ''
     cellLabel.value = colTitle
-    // Try to pretty-print JSON (arrays, objects serialised by Polars)
     if (typeof raw === 'string') {
         const trimmed = raw.trim()
         if ((trimmed.startsWith('[') || trimmed.startsWith('{')) && (trimmed.endsWith(']') || trimmed.endsWith('}'))) {
@@ -159,45 +140,29 @@ async function copyRow(row: Record<string, any>) {
     }
 }
 
-// ── Context menu ──────────────────────────────────────────────────────────
-const showCtx  = ref(false)
-const ctxX     = ref(0)
-const ctxY     = ref(0)
-const ctxText  = ref('')
+// ── Right-click → SelectionQueryModal ────────────────────────────────────
+// No intermediate context menu — right-click directly opens the query builder.
+// If the modal is already open, the selection is appended as the next $n binding.
+const showSelQuery   = ref(false)
+const selectionList  = ref<string[]>([])
 
-// selection query modal
-const showSelQuery  = ref(false)
-const selectionList = ref<string[]>([])
-
-function onCtxMenu(e: MouseEvent) {
+function onCtxMenu() {
     const sel = window.getSelection()?.toString().trim() ?? ''
     if (!sel) return
-    ctxText.value = sel
-    // clamp to viewport
-    ctxX.value = Math.min(e.clientX, window.innerWidth  - 260)
-    ctxY.value = Math.min(e.clientY, window.innerHeight - 80)
-    showCtx.value = true
-}
-
-function querySelection(addMode: boolean) {
-    showCtx.value = false
-    if (addMode) {
-        selectionList.value = [...selectionList.value, ctxText.value]
+    if (showSelQuery.value) {
+        // modal already open — add as next $n
+        selectionList.value = [...selectionList.value, sel]
     } else {
-        selectionList.value = [ctxText.value]
-        showSelQuery.value = true
+        // fresh open with $1 = selection
+        selectionList.value = [sel]
+        showSelQuery.value  = true
     }
 }
 
-function closeCtx() { showCtx.value = false }
-function onEscCtx(e: KeyboardEvent) { if (e.key === 'Escape') showCtx.value = false }
-
 // ── Column post-processing ────────────────────────────────────────────────
-// - idx:       double-click → copy row (existing)
-// - all other: single-click → open cell detail modal
 const processedColumns = computed(() =>
     props.columns.map(col => {
-        const base = col.render  // may be a search-highlight render from useSearch
+        const base = col.render
 
         if (col.key === 'idx') {
             return {
@@ -234,8 +199,6 @@ const bodyMaxHeight = ref(400)
 let ro: ResizeObserver | null = null
 
 onMounted(() => {
-    document.addEventListener('click', closeCtx)
-    document.addEventListener('keydown', onEscCtx)
     if (!containerEl.value) return
     ro = new ResizeObserver(([entry]) => {
         bodyMaxHeight.value = Math.max(entry.contentRect.height, 80)
@@ -243,11 +206,7 @@ onMounted(() => {
     ro.observe(containerEl.value)
 })
 
-onUnmounted(() => {
-    ro?.disconnect()
-    document.removeEventListener('click', closeCtx)
-    document.removeEventListener('keydown', onEscCtx)
-})
+onUnmounted(() => ro?.disconnect())
 </script>
 
 <style scoped>
@@ -282,6 +241,7 @@ onUnmounted(() => {
     line-height: 1.6;
     max-height: 60vh;
     overflow-y: auto;
+    cursor: text;
 }
 
 /* ── Modal search bar ──────────────────────────────────────────────────── */
@@ -304,32 +264,5 @@ onUnmounted(() => {
     color: #000;
     border-radius: 2px;
     padding: 0 1px;
-}
-
-/* ── Right-click context menu ─────────────────────────────────────────── */
-.cell-ctx-menu {
-    z-index: 9999;
-    background: #2a2a38;
-    border: 1px solid #3a3a52;
-    border-radius: 6px;
-    padding: 4px 0;
-    min-width: 240px;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.5);
-    font-size: 13px;
-    color: #ffffffd1;
-}
-
-.ctx-item {
-    padding: 7px 14px;
-    cursor: pointer;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-.ctx-item:hover { background: #3a3a52; }
-
-.ctx-sel-preview {
-    opacity: 0.75;
-    font-style: italic;
 }
 </style>
