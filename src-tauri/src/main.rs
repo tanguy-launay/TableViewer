@@ -259,6 +259,42 @@ fn parse_entries(entries_json: &str) -> Result<Vec<FileEntry>, String> {
 
 // ─── Output helpers ──────────────────────────────────────────────────────────
 
+/// Recursively convert an AnyValue to a serde_json::Value.
+/// Used so that List columns are emitted as proper JSON arrays instead of
+/// Polars' Display representation, which truncates long lists with `…`.
+fn anyvalue_to_json(val: AnyValue<'_>) -> serde_json::Value {
+    match val {
+        AnyValue::Null => serde_json::Value::Null,
+        AnyValue::Boolean(b) => serde_json::json!(b),
+        AnyValue::Int8(i) => serde_json::json!(i),
+        AnyValue::Int16(i) => serde_json::json!(i),
+        AnyValue::Int32(i) => serde_json::json!(i),
+        AnyValue::Int64(i) => serde_json::json!(i),
+        AnyValue::UInt8(u) => serde_json::json!(u),
+        AnyValue::UInt16(u) => serde_json::json!(u),
+        AnyValue::UInt32(u) => serde_json::json!(u),
+        AnyValue::UInt64(u) => serde_json::json!(u),
+        AnyValue::Float32(f) => serde_json::json!(f),
+        AnyValue::Float64(f) => serde_json::json!(f),
+        AnyValue::String(s) => serde_json::json!(s),
+        AnyValue::List(s) => serde_json::Value::Array(s.iter().map(anyvalue_to_json).collect()),
+        other => serde_json::json!(other.to_string()),
+    }
+}
+
+/// Produce a display string for a single cell value.
+/// List columns become compact JSON arrays (no Polars truncation).
+fn anyvalue_to_display(val: AnyValue<'_>) -> String {
+    match &val {
+        AnyValue::List(_) => {
+            let json_val = anyvalue_to_json(val);
+            serde_json::to_string(&json_val).unwrap_or_default()
+        }
+        AnyValue::Null => String::new(),
+        other => other.to_string(),
+    }
+}
+
 fn generate_table(df: &DataFrame) -> String {
     let col_names = df.get_column_names();
     let col_types = df.dtypes();
@@ -282,7 +318,7 @@ fn generate_table(df: &DataFrame) -> String {
             iters
                 .iter_mut()
                 .zip(col_names.iter())
-                .map(|(it, name)| (name.to_string(), it.next().unwrap().to_string()))
+                .map(|(it, name)| (name.to_string(), anyvalue_to_display(it.next().unwrap())))
                 .collect::<HashMap<_, _>>()
         })
         .collect::<Vec<_>>();
